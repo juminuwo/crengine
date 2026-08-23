@@ -862,6 +862,23 @@ static inline bool isVerticalHangingChar(lChar32 ch) {
     }
 }
 
+// Returns true for Japanese punctuation which may legitimately occupy the
+// final slot of a vertical column.  Kinsoku keeps these characters with the
+// preceding text, so their glyph may start at or just beyond clip.bottom.
+// Opening brackets and non-punctuation CJK classes must still be clipped.
+static inline bool isVerticalLineEndPunctuation(lChar32 ch) {
+    switch (getCJKCharType(ch)) {
+        case cjkt_closing_bracket:
+        case cjkt_dividing_punct: // ！？
+        case cjkt_middle_dot:     // ・：；
+        case cjkt_full_stop:      // 。．
+        case cjkt_comma:          // 、，
+            return true;
+        default:
+            return false;
+    }
+}
+
 // Step 2: Wrapper that delegates word placement to addLineHorizontal,
 // then patches frmline coordinates for vertical layout.
 //
@@ -2308,8 +2325,16 @@ void applyVerticalWordDraw(
     }
     state.vert_prev_plain_y0 = y0_out;
     state.vert_prev_effective_width = effective_width;
-    // Skip when slot start is at/past clip.bottom; descent can legitimately
-    // extend a few px past clip.bottom for the last char (buf->Draw clips it).
-    if ( y0_out >= clip.bottom )
+    // Line-start-prohibited Japanese punctuation may be retained at the end of
+    // this column by kinsoku, with its slot hanging just beyond the regular
+    // content boundary.  Fully-contained vertical columns are drawn with
+    // content_overflow_clip, so let that punctuation reach DrawTextString and
+    // paint into the bottom margin.  Keep the allowance bounded to one actual
+    // JFM slot; all ordinary overflow is still rejected here.
+    bool punctuation_hang = y0_out >= clip.bottom
+        && y0_out < clip.bottom + effective_width
+        && srcline->t.text && word->t.len > 0
+        && isVerticalLineEndPunctuation(srcline->t.text[word->t.start]);
+    if ( y0_out >= clip.bottom && !punctuation_hang )
         vert_skip_draw_out = true;
 }
