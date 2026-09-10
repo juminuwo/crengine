@@ -457,10 +457,16 @@ static void collectVerticalJustifyGaps( std::vector<VertJustifyGap> & gaps,
 
 static void applyVerticalJustification( formatted_line_t * frmline,
         const std::vector<VertJustifyGap> & gaps, int alignment, int usable_width ) {
-    if ( alignment != LTEXT_ALIGN_WIDTH || usable_width <= 0 || gaps.empty() )
+    if ( usable_width <= 0 || gaps.empty() )
         return;
     int extra = usable_width - (int)frmline->width;
     if ( extra == 0 )
+        return;
+    // Column fitting reserves JFM shrink even for the ragged final column of
+    // a justified paragraph. Apply that shrink when it overflows; otherwise
+    // punctuation glue can push the closing quote beyond the bottom margin.
+    // Only justified columns may stretch to fill unused space.
+    if ( extra > 0 && alignment != LTEXT_ALIGN_WIDTH )
         return;
     if ( extra < 0 && frmline->x > 0 )
         return;
